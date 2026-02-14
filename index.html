@@ -1,0 +1,2528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Security Attendance Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #0f766e;
+            --primary-light: #14b8a6;
+            --primary-dark: #0d5854;
+            --secondary: #1e293b;
+            --accent: #f59e0b;
+            --bg-main: #f8fafc;
+            --bg-card: #ffffff;
+            --text-primary: #0f172a;
+            --text-secondary: #64748b;
+            --border: #e2e8f0;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --error: #ef4444;
+            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: linear-gradient(135deg, #f8fafc 0%, #e0f2fe 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+
+        .loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100vh;
+            background: linear-gradient(135deg, #0f766e 0%, #14b8a6 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .loading-screen.hidden {
+            display: none;
+        }
+
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            color: white;
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .error-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100vh;
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9998;
+            flex-direction: column;
+            gap: 20px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .error-screen.show {
+            display: flex;
+        }
+
+        .error-icon {
+            font-size: 64px;
+            color: white;
+        }
+
+        .error-title {
+            color: white;
+            font-size: 28px;
+            font-weight: 700;
+        }
+
+        .error-message {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 16px;
+            max-width: 600px;
+        }
+
+        .retry-btn {
+            margin-top: 20px;
+            padding: 14px 32px;
+            background: white;
+            color: #ef4444;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .retry-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+        }
+
+        .dashboard {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 30px 20px;
+            display: none;
+        }
+
+        .dashboard.active {
+            display: block;
+        }
+
+        .header {
+            background: white;
+            padding: 24px 32px;
+            border-radius: 20px;
+            margin-bottom: 30px;
+            box-shadow: var(--shadow-md);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .header-title {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .header-badge {
+            background: var(--primary);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .refresh-btn {
+            padding: 12px 24px;
+            background: var(--secondary);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+            font-size: 14px;
+        }
+
+        .refresh-btn:hover {
+            background: #334155;
+            transform: translateY(-2px);
+        }
+
+        .controls {
+            background: white;
+            padding: 24px 32px;
+            border-radius: 20px;
+            margin-bottom: 30px;
+            box-shadow: var(--shadow-md);
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 20px;
+            align-items: end;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .controls-row-2 {
+            grid-column: 1 / -1;
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr;
+            gap: 20px;
+            align-items: end;
+        }
+
+        .date-nav-container {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .reset-container {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .date-nav-buttons {
+            display: flex;
+            gap: 8px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .control-label {
+            font-weight: 600;
+            color: var(--text-primary);
+            font-size: 14px;
+        }
+
+        select, input[type="date"], input[type="text"] {
+            padding: 12px 16px;
+            border: 2px solid var(--border);
+            border-radius: 10px;
+            font-size: 15px;
+            font-family: 'Outfit', sans-serif;
+            transition: all 0.3s;
+            background: white;
+        }
+
+        select:focus, input[type="date"]:focus, input[type="text"]:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.1);
+        }
+
+        .date-nav-group {
+            display: flex;
+            gap: 8px;
+            align-items: flex-end;
+        }
+
+        .date-nav-group input[type="date"] {
+            flex: 1;
+        }
+
+        .date-nav-btn {
+            padding: 12px 16px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 14px;
+            transition: all 0.3s;
+            white-space: nowrap;
+            flex: 1;
+        }
+
+        .date-nav-btn:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+        }
+
+        .sort-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            align-items: center;
+        }
+
+        .sort-label {
+            font-weight: 600;
+            color: var(--text-primary);
+            font-size: 14px;
+        }
+
+        .sort-btn {
+            padding: 10px 16px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 13px;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .sort-btn:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+        }
+
+        .sort-btn.active {
+            background: var(--primary-dark);
+            box-shadow: var(--shadow-md);
+        }
+
+        .btn {
+            padding: 12px 16px;
+            background: #f1f5f9;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
+            color: #475569;
+            font-family: 'Outfit', sans-serif;
+            transition: all 0.3s;
+        }
+
+        .btn:hover {
+            background: #e2e8f0;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 30px;
+            background: white;
+            padding: 8px;
+            border-radius: 16px;
+            box-shadow: var(--shadow-md);
+            flex-wrap: wrap;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 14px 24px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-weight: 600;
+            font-size: 15px;
+            cursor: pointer;
+            border-radius: 12px;
+            transition: all 0.3s;
+            font-family: 'Outfit', sans-serif;
+            min-width: 150px;
+        }
+
+        .tab.active {
+            background: var(--primary);
+            color: white;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 24px;
+            border-radius: 16px;
+            box-shadow: var(--shadow-md);
+            border-left: 4px solid var(--primary);
+            transition: all 0.3s;
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .stat-label {
+            font-size: 13px;
+            color: var(--text-secondary);
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--primary);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .cards-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 24px;
+            margin-bottom: 30px;
+        }
+
+        .attendance-card {
+            background: white;
+            border-radius: 16px;
+            box-shadow: var(--shadow-md);
+            overflow: hidden;
+            transition: all 0.3s;
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        .attendance-card:hover {
+            transform: translateY(-6px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.12);
+        }
+
+        .card-header {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            padding: 20px;
+            color: white;
+        }
+
+        .card-time {
+            font-size: 12px;
+            opacity: 0.9;
+            font-weight: 500;
+        }
+
+        .card-name {
+            font-size: 20px;
+            font-weight: 700;
+            margin-top: 4px;
+            margin-bottom: 4px;
+        }
+
+        .card-designation {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .card-body {
+            padding: 20px;
+        }
+
+        .card-info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .card-info-row:last-child {
+            border-bottom: none;
+        }
+
+        .info-label {
+            font-size: 13px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .info-value {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .card-photo {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            background: var(--border);
+            margin-top: 16px;
+            border-radius: 12px;
+        }
+
+        .download-btn {
+            width: 100%;
+            padding: 12px;
+            margin-top: 16px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 14px;
+        }
+
+        .download-btn:hover {
+            background: #d97706;
+            transform: translateY(-2px);
+        }
+
+        .chart-container {
+            background: white;
+            padding: 30px;
+            border-radius: 16px;
+            box-shadow: var(--shadow-md);
+            margin-bottom: 30px;
+        }
+
+        .chart-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 24px;
+        }
+
+        .chart-wrapper {
+            position: relative;
+            height: 300px;
+        }
+
+        .age-summary-table {
+            width: 100%;
+            margin-top: 20px;
+            border-collapse: collapse;
+        }
+
+        .age-summary-table th,
+        .age-summary-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .age-summary-table th {
+            background: var(--bg-main);
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .table-container {
+            background: white;
+            padding: 30px;
+            border-radius: 16px;
+            box-shadow: var(--shadow-md);
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        thead {
+            background: var(--primary);
+            color: white;
+        }
+
+        th {
+            padding: 14px 16px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        td {
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        tbody tr:hover {
+            background: #f8fafc;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 80px 20px;
+            color: var(--text-secondary);
+        }
+
+        .empty-icon {
+            font-size: 64px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .last-updated {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 8px;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 30px 20px;
+            margin-top: 40px;
+            border-top: 2px solid var(--border);
+            background: white;
+            border-radius: 20px;
+            box-shadow: var(--shadow-md);
+        }
+
+        .footer-text {
+            font-size: 14px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .footer-name {
+            color: var(--primary);
+            font-weight: 700;
+        }
+
+        .debug-panel {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .debug-title {
+            color: #fbbf24;
+            font-weight: 600;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        .debug-item {
+            margin: 5px 0;
+            padding: 5px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 4px;
+        }
+
+        .debug-label {
+            color: #60a5fa;
+        }
+
+        .debug-value {
+            color: #34d399;
+        }
+
+        .debug-toggle {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #1e293b;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 50px;
+            cursor: pointer;
+            font-weight: 600;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 1000;
+        }
+
+        .debug-toggle:hover {
+            background: #334155;
+        }
+
+        @media (max-width: 768px) {
+            .cards-container {
+                grid-template-columns: 1fr;
+            }
+            
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .header {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .controls {
+                grid-template-columns: 1fr;
+            }
+
+            .controls-row-2 {
+                grid-template-columns: 1fr;
+            }
+
+            .date-nav-group {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .date-nav-buttons {
+                width: 100%;
+            }
+
+            .sort-controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .sort-btn {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div id="loadingScreen" class="loading-screen">
+        <div class="spinner"></div>
+        <div class="loading-text">Loading attendance data...</div>
+    </div>
+
+    <!-- Error Screen -->
+    <div id="errorScreen" class="error-screen">
+        <div class="error-icon">⚠️</div>
+        <div class="error-title">Unable to Load Data</div>
+        <div class="error-message" id="errorMessage">
+            Failed to connect to Google Sheets. Please check your configuration.
+        </div>
+        <button class="retry-btn" onclick="location.reload()">Retry</button>
+    </div>
+
+    <!-- Dashboard -->
+    <div id="dashboard" class="dashboard">
+        <!-- Debug Panel -->
+        <div id="debugPanel" class="debug-panel" style="display: none;">
+            <div class="debug-title">🔍 Date Filter Debug Information</div>
+            <div id="debugContent"></div>
+        </div>
+
+        <div class="header">
+            <div>
+                <div class="header-title">
+                    🛡️ Security Attendance Dashboard
+                    <span class="header-badge">Live</span>
+                </div>
+                <div class="last-updated" id="lastUpdated"></div>
+            </div>
+            <button id="refreshBtn" class="refresh-btn">
+                🔄 Refresh Data
+            </button>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <label class="control-label">Agency</label>
+                <select id="agencyFilter">
+                    <option value="all">All Agencies</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <label class="control-label">Shift</label>
+                <select id="shiftFilter">
+                    <option value="all">All Shifts</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label class="control-label">Designation</label>
+                <select id="designationFilter">
+                    <option value="all">All Designations</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label class="control-label">Location</label>
+                <select id="locationFilter">
+                    <option value="all">All Locations</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label class="control-label">Name</label>
+                <input type="text" id="nameFilter" placeholder="Search by name..." />
+            </div>
+
+            <div class="controls-row-2">
+                <div class="date-nav-container">
+                    <label class="control-label">Date Selection</label>
+                    <input type="date" id="dateFilter" style="width: 100%; padding: 12px 16px; border: 2px solid var(--border); border-radius: 10px; font-size: 15px;" />
+                </div>
+                
+                <div class="control-group">
+                    <label class="control-label">Date Navigation</label>
+                    <div class="date-nav-buttons">
+                        <button class="date-nav-btn" id="prevDayBtn">◀ Prev</button>
+                        <button class="date-nav-btn" id="nextDayBtn">Next ▶</button>
+                    </div>
+                </div>
+
+                <div class="reset-container">
+                    <label class="control-label">Quick Actions</label>
+                    <button id="resetFilters" class="btn">
+                        Reset All Filters
+                    </button>
+                </div>
+            </div>
+
+            <div class="control-group" style="grid-column: span 1;">
+                <label class="control-label">Month Filter</label>
+                <select id="monthFilter">
+                    <option value="all">All Months</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="statsGrid" class="stats-grid"></div>
+
+        <div class="tabs">
+            <button class="tab active" data-tab="daily">📅 Daily Cards</button>
+            <button class="tab" data-tab="monthly">📊 Monthly Review</button>
+            <button class="tab" data-tab="analytics">📈 Analytics</button>
+            <button class="tab" data-tab="demographics">👥 Demographics</button>
+            <button class="tab" data-tab="safety">⚠️ Safety Report</button>
+            <button class="tab" data-tab="table">📋 Data Table</button>
+        </div>
+
+        <!-- Tab Contents -->
+        <div id="dailyTab" class="tab-content active">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;">
+                <h2 style="font-size: 22px; font-weight: 700;">Daily Attendance Cards</h2>
+                <button class="refresh-btn" style="background: #f59e0b;" onclick="downloadDailyReport()">
+                    📥 Download Daily Report
+                </button>
+            </div>
+            
+            <div class="sort-controls">
+                <span class="sort-label">Sort By:</span>
+                <button class="sort-btn" id="sortByName" onclick="toggleSort('name')">
+                    <span>Name</span>
+                    <span id="sortNameIcon">↕️</span>
+                </button>
+                <button class="sort-btn" id="sortByTime" onclick="toggleSort('time')">
+                    <span>Check-in Time</span>
+                    <span id="sortTimeIcon">↕️</span>
+                </button>
+            </div>
+            
+            <div id="cardsContainer" class="cards-container"></div>
+        </div>
+
+        <div id="monthlyTab" class="tab-content">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;">
+                <h2 style="font-size: 22px; font-weight: 700;">Monthly Overview</h2>
+                <button class="refresh-btn" style="background: #f59e0b;" onclick="downloadMonthlyReport()">
+                    📥 Download Monthly Report
+                </button>
+            </div>
+
+            <div class="chart-container">
+                <h3 class="chart-title">Daily Attendance Trend</h3>
+                <div class="chart-wrapper">
+                    <canvas id="trendChart"></canvas>
+                </div>
+            </div>
+
+            <div class="chart-container">
+                <h3 class="chart-title">Agency Distribution</h3>
+                <div class="chart-wrapper">
+                    <canvas id="agencyBarChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div id="analyticsTab" class="tab-content">
+            <h2 style="font-size: 22px; font-weight: 700; margin-bottom: 20px;">Analytics Dashboard</h2>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 30px;">
+                <div class="chart-container">
+                    <h3 class="chart-title">Guards by Agency</h3>
+                    <div class="chart-wrapper">
+                        <canvas id="agencyPieChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="chart-container">
+                    <h3 class="chart-title">Attendance Trend</h3>
+                    <div class="chart-wrapper">
+                        <canvas id="trendLineChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="demographicsTab" class="tab-content">
+            <h2 style="font-size: 22px; font-weight: 700; margin-bottom: 20px;">Demographics & Age Analysis</h2>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 30px;">
+                <div class="chart-container">
+                    <h3 class="chart-title">Age Distribution by Category</h3>
+                    <div class="chart-wrapper">
+                        <canvas id="ageDoughnutChart"></canvas>
+                    </div>
+                    <table class="age-summary-table">
+                        <thead>
+                            <tr>
+                                <th>Age Category</th>
+                                <th>Count</th>
+                                <th>Average Age</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ageSummaryTableBody">
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="chart-container">
+                    <h3 class="chart-title">Service Tenure Distribution (Bar)</h3>
+                    <div class="chart-wrapper">
+                        <canvas id="tenureBarChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 30px;">
+                <div class="chart-container">
+                    <h3 class="chart-title">Service Tenure Distribution (Pie)</h3>
+                    <div class="chart-wrapper">
+                        <canvas id="tenurePieChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="chart-container">
+                    <h3 class="chart-title">Tenure Summary</h3>
+                    <table class="age-summary-table">
+                        <thead>
+                            <tr>
+                                <th>Tenure Category</th>
+                                <th>Unique Guards</th>
+                                <th>Percentage</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tenureSummaryTableBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="safetyTab" class="tab-content">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;">
+                <h2 style="font-size: 22px; font-weight: 700;">Safety Report - Double Shift Monitoring</h2>
+                <button class="refresh-btn" style="background: #ef4444;" onclick="downloadSafetyReport()">
+                    📥 Download Safety Report
+                </button>
+            </div>
+            
+            <div style="background: #fef2f2; border-left: 4px solid #ef4444; padding: 16px; border-radius: 12px; margin-bottom: 20px;">
+                <h3 style="color: #991b1b; font-size: 16px; font-weight: 600; margin-bottom: 8px;">⚠️ Fatigue Management & Safety Compliance</h3>
+                <p style="color: #7f1d1d; font-size: 14px;">This report identifies guards working multiple shifts on the same day, which may indicate fatigue risk and safety concerns.</p>
+            </div>
+
+            <div class="table-container">
+                <div id="doubleShiftContainer"></div>
+            </div>
+        </div>
+
+        <div id="tableTab" class="tab-content">
+            <div class="table-container">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;">
+                    <h2 style="font-size: 22px; font-weight: 700;">Detailed Records</h2>
+                    <button class="refresh-btn" style="background: #f59e0b;" onclick="downloadDailyReport()">
+                        📥 Export Table
+                    </button>
+                </div>
+                <div id="tableContainer"></div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p class="footer-text">Created and designed by: <span class="footer-name">Capt. Vijay A. Varma</span></p>
+        </div>
+    </div>
+
+    <!-- Debug Toggle Button -->
+    <button id="debugToggle" class="debug-toggle" onclick="toggleDebug()">🔍 Debug</button>
+
+    <script>
+        // ============================================
+        // CONFIGURATION - PASTE YOUR VALUES HERE
+        // ============================================
+        
+        const CONFIG = {
+            // Your Google Sheets ID (from the URL)
+            SHEET_ID: '1DN1vDwidwQTuAcOCAoliBl5xT4KV6jnOXPMSsonuvX8',
+            
+            // Your Google API Key
+            API_KEY: 'AIzaSyDgDQ_D4tdWm-awYvGkVHDpC5JFpRpnAJA',
+            
+            // Sheet name (tab name in your spreadsheet)
+            SHEET_NAME: 'Attendance',
+            
+            // Auto-refresh interval in minutes (0 to disable)
+            AUTO_REFRESH_MINUTES: 5,
+            
+            // Date format in your Google Sheet
+            // Options: 'DD/MM/YYYY' or 'MM/DD/YYYY'
+            DATE_FORMAT: 'DD/MM/YYYY',  // ← SET THIS TO MATCH YOUR SHEET
+            
+            // Shift start times (24-hour format) and grace period
+            SHIFT_TIMES: {
+                'Morning': '08:00',
+                'Afternoon': '14:00',
+                'Evening': '18:00',
+                'Night': '22:00'
+            },
+            
+            // Grace period in minutes for on-time calculation
+            GRACE_PERIOD_MINUTES: 10
+        };
+
+        // ============================================
+        // NEW DATA SCHEMA MAPPING
+        // Column Order: Date; Time; Day; Agency; Shift; Total Guards; Name; Designation; Contact; Location; Check-in Time; Photo URL; Photo Drive ID; D.O.B; Employed Since; Service Tenure
+        // ============================================
+
+        let allData = [];
+        let filteredData = [];
+        let charts = {};
+        
+        // Sorting state
+        let currentSort = {
+            field: null,
+            direction: 'asc' // 'asc' or 'desc'
+        };
+
+        // Initialize app
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Dashboard initializing...');
+            initializeApp();
+        });
+
+        async function initializeApp() {
+            if (CONFIG.SHEET_ID === 'YOUR_GOOGLE_SHEET_ID_HERE' || 
+                CONFIG.API_KEY === 'YOUR_GOOGLE_API_KEY_HERE') {
+                showError('Configuration Error', 
+                    'Please configure your Google Sheet ID and API Key in the CONFIG section of the code.');
+                return;
+            }
+
+            // Setup event listeners with auto-refresh
+            document.getElementById('refreshBtn').addEventListener('click', loadData);
+            
+            // Auto-refresh on filter changes
+            document.getElementById('agencyFilter').addEventListener('change', () => {
+                applyFilters();
+                // Auto-update without manual refresh
+            });
+            document.getElementById('shiftFilter').addEventListener('change', () => {
+                applyFilters();
+            });
+            document.getElementById('designationFilter').addEventListener('change', () => {
+                applyFilters();
+            });
+            document.getElementById('locationFilter').addEventListener('change', () => {
+                applyFilters();
+            });
+            document.getElementById('nameFilter').addEventListener('input', () => {
+                applyFilters();
+            });
+            document.getElementById('dateFilter').addEventListener('change', () => {
+                applyFilters();
+            });
+            document.getElementById('monthFilter').addEventListener('change', () => {
+                applyFilters();
+            });
+            document.getElementById('resetFilters').addEventListener('click', resetFilters);
+            
+            // Date navigation buttons with auto-refresh
+            document.getElementById('prevDayBtn').addEventListener('click', () => {
+                navigatePrevDay();
+                // Auto-updates via applyFilters() inside navigatePrevDay
+            });
+            document.getElementById('nextDayBtn').addEventListener('click', () => {
+                navigateNextDay();
+                // Auto-updates via applyFilters() inside navigateNextDay
+            });
+            
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.addEventListener('click', function() {
+                    switchTab(this.dataset.tab);
+                });
+            });
+
+            await loadData();
+
+            if (CONFIG.AUTO_REFRESH_MINUTES > 0) {
+                setInterval(loadData, CONFIG.AUTO_REFRESH_MINUTES * 60 * 1000);
+            }
+        }
+
+        async function loadData() {
+            try {
+                document.getElementById('loadingScreen').classList.remove('hidden');
+                document.getElementById('errorScreen').classList.remove('show');
+                
+                const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${CONFIG.SHEET_NAME}?key=${CONFIG.API_KEY}`;
+                
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                if (!data.values || data.values.length < 2) {
+                    throw new Error('No data found in the sheet');
+                }
+
+                // Parse sheet data with new schema
+                const headers = data.values[0];
+                const rows = data.values.slice(1);
+                
+                allData = rows.map(row => {
+                    const record = {};
+                    headers.forEach((header, index) => {
+                        record[header] = row[index] || '';
+                    });
+                    
+                    // Normalize the Date field to YYYY-MM-DD format
+                    if (record.Date) {
+                        const normalizedDate = normalizeDate(record.Date);
+                        record.Date = normalizedDate;
+                        record.OriginalDate = row[headers.indexOf('Date')] || ''; // Keep original for debugging
+                    }
+                    
+                    // Calculate age if D.O.B is present
+                    if (record['D.O.B']) {
+                        record.Age = calculateAge(record['D.O.B']);
+                    }
+                    
+                    return record;
+                });
+
+                filteredData = allData;
+                
+                document.getElementById('loadingScreen').classList.add('hidden');
+                document.getElementById('dashboard').classList.add('active');
+                document.getElementById('lastUpdated').textContent = 
+                    `Last updated: ${new Date().toLocaleString()}`;
+                
+                // Log date format samples for debugging
+                console.log('=== DATA LOADED ===');
+                console.log(`Total records: ${allData.length}`);
+                if (allData.length > 0) {
+                    console.log('Sample record dates (first 5):');
+                    allData.slice(0, 5).forEach((record, idx) => {
+                        console.log(`  ${idx + 1}. Original: "${record.OriginalDate}" → Normalized: "${record.Date}"`);
+                    });
+                    
+                    // Show unique dates
+                    const uniqueDates = [...new Set(allData.map(d => d.Date))].filter(Boolean).sort();
+                    console.log(`Unique dates in dataset: ${uniqueDates.length}`);
+                    console.log('First 10 unique dates:', uniqueDates.slice(0, 10));
+                }
+                
+                populateFilters();
+                updateDashboard();
+                
+                console.log(`Loaded ${allData.length} records successfully`);
+                
+            } catch (error) {
+                console.error('Error loading data:', error);
+                showError('Data Loading Error', 
+                    `Failed to load data from Google Sheets: ${error.message}`);
+            }
+        }
+
+        function calculateAge(dob) {
+            if (!dob) return null;
+            const birthDate = new Date(dob);
+            const today = new Date();
+            let age = today.getFullYear() - birthDate.getFullYear();
+            const monthDiff = today.getMonth() - birthDate.getMonth();
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+                age--;
+            }
+            return age;
+        }
+
+        function normalizeDate(dateStr) {
+            if (!dateStr) return null;
+            
+            try {
+                let date;
+                
+                // Check if date string matches DD/MM/YYYY or MM/DD/YYYY pattern
+                const datePattern = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
+                const match = dateStr.match(datePattern);
+                
+                if (match && CONFIG.DATE_FORMAT === 'DD/MM/YYYY') {
+                    // Parse as DD/MM/YYYY
+                    const day = parseInt(match[1], 10);
+                    const month = parseInt(match[2], 10);
+                    const year = parseInt(match[3], 10);
+                    
+                    // Create date (month is 0-indexed in JS)
+                    date = new Date(year, month - 1, day);
+                    
+                    console.log(`Parsing DD/MM/YYYY: ${dateStr} → ${date.toISOString().split('T')[0]}`);
+                } else if (match && CONFIG.DATE_FORMAT === 'MM/DD/YYYY') {
+                    // Parse as MM/DD/YYYY
+                    const month = parseInt(match[1], 10);
+                    const day = parseInt(match[2], 10);
+                    const year = parseInt(match[3], 10);
+                    
+                    date = new Date(year, month - 1, day);
+                } else {
+                    // Try standard parsing for other formats
+                    date = new Date(dateStr);
+                }
+                
+                // Check if valid date
+                if (isNaN(date.getTime())) {
+                    console.warn('Invalid date:', dateStr);
+                    return null;
+                }
+                
+                // Return in ISO format YYYY-MM-DD
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                
+                return `${year}-${month}-${day}`;
+            } catch (error) {
+                console.error('Date parsing error:', dateStr, error);
+                return null;
+            }
+        }
+
+        function convertTo24Hour(timeStr) {
+            if (!timeStr) return null;
+            
+            // If already in 24-hour format (HH:MM), return as is
+            if (/^\d{1,2}:\d{2}$/.test(timeStr)) {
+                const [hours, minutes] = timeStr.split(':').map(Number);
+                return hours * 60 + minutes; // Convert to minutes for comparison
+            }
+            
+            // Handle 12-hour format (e.g., "08:00 AM", "02:30 PM")
+            const match = timeStr.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+            if (!match) return null;
+            
+            let hours = parseInt(match[1]);
+            const minutes = parseInt(match[2]);
+            const period = match[3].toUpperCase();
+            
+            // Convert to 24-hour
+            if (period === 'PM' && hours !== 12) {
+                hours += 12;
+            } else if (period === 'AM' && hours === 12) {
+                hours = 0;
+            }
+            
+            return hours * 60 + minutes; // Return total minutes
+        }
+
+        function isOnTime(checkInTime, shift) {
+            if (!checkInTime || !shift) return false;
+            
+            const shiftStartTime = CONFIG.SHIFT_TIMES[shift];
+            if (!shiftStartTime) return false;
+            
+            const checkInMinutes = convertTo24Hour(checkInTime);
+            const shiftStartMinutes = convertTo24Hour(shiftStartTime);
+            
+            if (checkInMinutes === null || shiftStartMinutes === null) return false;
+            
+            // Handle night shift crossing midnight
+            let timeDifference;
+            if (shift === 'Night' && checkInMinutes < 720) { // Before noon next day
+                // Night shift worker checking in early next morning
+                timeDifference = checkInMinutes + (24 * 60) - shiftStartMinutes;
+            } else {
+                timeDifference = checkInMinutes - shiftStartMinutes;
+            }
+            
+            // On-time if within grace period (negative = early, positive = late)
+            return timeDifference <= CONFIG.GRACE_PERIOD_MINUTES;
+        }
+
+        function getAgeCategory(age) {
+            if (!age || age < 20) return 'Under 20';
+            if (age <= 30) return '20-30';
+            if (age <= 40) return '31-40';
+            if (age <= 50) return '41-50';
+            return '50+';
+        }
+
+        function showError(title, message) {
+            document.getElementById('loadingScreen').classList.add('hidden');
+            document.getElementById('errorScreen').classList.add('show');
+            document.getElementById('errorMessage').innerHTML = `<strong>${title}</strong><br><br>${message}`;
+        }
+
+        function populateFilters() {
+            // Populate agencies
+            const agencies = [...new Set(allData.map(d => d.Agency))].filter(Boolean).sort();
+            const agencySelect = document.getElementById('agencyFilter');
+            agencySelect.innerHTML = '<option value="all">All Agencies</option>';
+            agencies.forEach(agency => {
+                const option = document.createElement('option');
+                option.value = agency;
+                option.textContent = agency;
+                agencySelect.appendChild(option);
+            });
+
+            // Populate shifts
+            const shifts = [...new Set(allData.map(d => d.Shift))].filter(Boolean).sort();
+            const shiftSelect = document.getElementById('shiftFilter');
+            shiftSelect.innerHTML = '<option value="all">All Shifts</option>';
+            shifts.forEach(shift => {
+                const option = document.createElement('option');
+                option.value = shift;
+                option.textContent = shift;
+                shiftSelect.appendChild(option);
+            });
+
+            // Populate designations
+            const designations = [...new Set(allData.map(d => d.Designation))].filter(Boolean).sort();
+            const designationSelect = document.getElementById('designationFilter');
+            designationSelect.innerHTML = '<option value="all">All Designations</option>';
+            designations.forEach(designation => {
+                const option = document.createElement('option');
+                option.value = designation;
+                option.textContent = designation;
+                designationSelect.appendChild(option);
+            });
+
+            // Populate locations
+            const locations = [...new Set(allData.map(d => d.Location))].filter(Boolean).sort();
+            const locationSelect = document.getElementById('locationFilter');
+            locationSelect.innerHTML = '<option value="all">All Locations</option>';
+            locations.forEach(location => {
+                const option = document.createElement('option');
+                option.value = location;
+                option.textContent = location;
+                locationSelect.appendChild(option);
+            });
+
+            // Populate months from normalized dates
+            const months = [...new Set(allData.map(d => {
+                if (!d.Date) return null;
+                // Date is already normalized to YYYY-MM-DD, extract YYYY-MM
+                return d.Date.substring(0, 7);
+            }))].filter(Boolean).sort().reverse();
+            
+            const monthSelect = document.getElementById('monthFilter');
+            monthSelect.innerHTML = '<option value="all">All Months</option>';
+            
+            const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                               'July', 'August', 'September', 'October', 'November', 'December'];
+            
+            months.forEach(monthKey => {
+                const [year, month] = monthKey.split('-');
+                const monthName = monthNames[parseInt(month) - 1];
+                const option = document.createElement('option');
+                option.value = monthKey;
+                option.textContent = `${monthName} ${year}`;
+                monthSelect.appendChild(option);
+            });
+
+            console.log('Populated filters. Months available:', months);
+        }
+
+        function applyFilters() {
+            const agency = document.getElementById('agencyFilter').value;
+            const shift = document.getElementById('shiftFilter').value;
+            const designation = document.getElementById('designationFilter').value;
+            const location = document.getElementById('locationFilter').value;
+            const name = document.getElementById('nameFilter').value.toLowerCase();
+            const date = document.getElementById('dateFilter').value;
+            const month = document.getElementById('monthFilter').value;
+
+            // Debug information
+            const debugInfo = {
+                selectedDate: date,
+                selectedMonth: month,
+                totalRecords: allData.length,
+                sampleDates: [],
+                dateMatches: 0,
+                monthMatches: 0
+            };
+
+            filteredData = allData.filter(record => {
+                let matches = true;
+                
+                if (agency !== 'all' && record.Agency !== agency) {
+                    matches = false;
+                }
+                
+                if (shift !== 'all' && record.Shift !== shift) {
+                    matches = false;
+                }
+
+                if (designation !== 'all' && record.Designation !== designation) {
+                    matches = false;
+                }
+
+                if (location !== 'all' && record.Location !== location) {
+                    matches = false;
+                }
+
+                if (name && (!record.Name || !record.Name.toLowerCase().includes(name))) {
+                    matches = false;
+                }
+                
+                // Date filter - compare normalized dates
+                if (date && record.Date) {
+                    // Collect sample dates for debugging
+                    if (debugInfo.sampleDates.length < 5) {
+                        debugInfo.sampleDates.push({
+                            original: record.OriginalDate || record.Date,
+                            normalized: record.Date,
+                            selected: date,
+                            matches: record.Date === date
+                        });
+                    }
+                    
+                    if (record.Date === date) {
+                        debugInfo.dateMatches++;
+                    } else {
+                        matches = false;
+                    }
+                }
+
+                // Month filter - extract year-month from normalized date
+                if (month !== 'all' && record.Date) {
+                    const recordMonth = record.Date.substring(0, 7); // Extract YYYY-MM from YYYY-MM-DD
+                    
+                    if (recordMonth === month) {
+                        debugInfo.monthMatches++;
+                    } else {
+                        matches = false;
+                    }
+                }
+                
+                return matches;
+            });
+
+            // Update debug panel
+            updateDebugPanel(debugInfo, filteredData.length);
+            
+            updateDashboard();
+        }
+
+        function updateDebugPanel(debugInfo, filteredCount) {
+            const debugContent = document.getElementById('debugContent');
+            if (!debugContent) return;
+            
+            let html = `
+                <div class="debug-item" style="background: rgba(16, 185, 129, 0.1); border-left: 3px solid #10b981;">
+                    <span class="debug-label">Date Format Setting:</span> 
+                    <span class="debug-value">${CONFIG.DATE_FORMAT}</span>
+                </div>
+                <div class="debug-item">
+                    <span class="debug-label">Selected Date:</span> 
+                    <span class="debug-value">${debugInfo.selectedDate || 'None'}</span>
+                </div>
+                <div class="debug-item">
+                    <span class="debug-label">Selected Month:</span> 
+                    <span class="debug-value">${debugInfo.selectedMonth || 'All'}</span>
+                </div>
+                <div class="debug-item">
+                    <span class="debug-label">Total Records:</span> 
+                    <span class="debug-value">${debugInfo.totalRecords}</span>
+                </div>
+                <div class="debug-item">
+                    <span class="debug-label">Filtered Records:</span> 
+                    <span class="debug-value">${filteredCount}</span>
+                </div>
+                <div class="debug-item">
+                    <span class="debug-label">Date Matches:</span> 
+                    <span class="debug-value">${debugInfo.dateMatches}</span>
+                </div>
+                <div class="debug-item">
+                    <span class="debug-label">Month Matches:</span> 
+                    <span class="debug-value">${debugInfo.monthMatches}</span>
+                </div>
+            `;
+            
+            if (debugInfo.sampleDates.length > 0) {
+                html += '<div class="debug-title" style="margin-top: 15px;">Sample Date Comparisons:</div>';
+                debugInfo.sampleDates.forEach((sample, idx) => {
+                    html += `
+                        <div class="debug-item">
+                            <div><span class="debug-label">Record ${idx + 1}:</span></div>
+                            <div style="padding-left: 10px;">
+                                <div><span class="debug-label">Original:</span> <span class="debug-value">${sample.original}</span></div>
+                                <div><span class="debug-label">Normalized:</span> <span class="debug-value">${sample.normalized}</span></div>
+                                <div><span class="debug-label">Selected:</span> <span class="debug-value">${sample.selected}</span></div>
+                                <div><span class="debug-label">Match:</span> <span class="debug-value" style="color: ${sample.matches ? '#34d399' : '#f87171'}">${sample.matches ? '✓ YES' : '✗ NO'}</span></div>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+            
+            debugContent.innerHTML = html;
+        }
+
+        function toggleDebug() {
+            const panel = document.getElementById('debugPanel');
+            if (panel.style.display === 'none') {
+                panel.style.display = 'block';
+            } else {
+                panel.style.display = 'none';
+            }
+        }
+
+        function resetFilters() {
+            document.getElementById('agencyFilter').value = 'all';
+            document.getElementById('shiftFilter').value = 'all';
+            document.getElementById('designationFilter').value = 'all';
+            document.getElementById('locationFilter').value = 'all';
+            document.getElementById('nameFilter').value = '';
+            document.getElementById('dateFilter').value = '';
+            document.getElementById('monthFilter').value = 'all';
+            currentSort = { field: null, direction: 'asc' };
+            updateSortButtons();
+            applyFilters();
+        }
+
+        function navigatePrevDay() {
+            const dateInput = document.getElementById('dateFilter');
+            const currentDate = dateInput.value ? new Date(dateInput.value) : new Date();
+            currentDate.setDate(currentDate.getDate() - 1);
+            dateInput.value = currentDate.toISOString().split('T')[0];
+            applyFilters();
+        }
+
+        function navigateNextDay() {
+            const dateInput = document.getElementById('dateFilter');
+            const currentDate = dateInput.value ? new Date(dateInput.value) : new Date();
+            currentDate.setDate(currentDate.getDate() + 1);
+            dateInput.value = currentDate.toISOString().split('T')[0];
+            applyFilters();
+        }
+
+        function updateDashboard() {
+            updateStats();
+            updateCards();
+            updateTable();
+            updateCharts();
+            updateDemographics();
+            updateSafetyReport();
+        }
+
+        function updateStats() {
+            // COUNT unique names only (deduplication)
+            const uniqueNames = new Set(filteredData.map(d => d.Name).filter(Boolean));
+            const totalGuards = uniqueNames.size;
+            
+            const uniqueAgencies = new Set(filteredData.map(d => d.Agency).filter(Boolean)).size;
+            
+            // Calculate on-time rate with proper shift time comparison
+            const onTimeCount = filteredData.filter(d => 
+                isOnTime(d['Check-in Time'], d.Shift)
+            ).length;
+            const onTimePercent = filteredData.length > 0 
+                ? ((onTimeCount / filteredData.length) * 100).toFixed(1) 
+                : 0;
+            
+            // Calculate average age
+            const ages = filteredData.map(d => d.Age).filter(age => age !== null && !isNaN(age));
+            const avgAge = ages.length > 0 ? (ages.reduce((sum, age) => sum + age, 0) / ages.length).toFixed(1) : 'N/A';
+
+            const statsHtml = `
+                <div class="stat-card">
+                    <div class="stat-label">Total Guards (Unique)</div>
+                    <div class="stat-value">${totalGuards}</div>
+                </div>
+                <div class="stat-card" style="border-left-color: #f59e0b;">
+                    <div class="stat-label">Agencies Active</div>
+                    <div class="stat-value" style="color: #f59e0b;">${uniqueAgencies}</div>
+                </div>
+                <div class="stat-card" style="border-left-color: #10b981;">
+                    <div class="stat-label">On-Time Rate</div>
+                    <div class="stat-value" style="color: #10b981;">${onTimePercent}%</div>
+                </div>
+                <div class="stat-card" style="border-left-color: #6366f1;">
+                    <div class="stat-label">Average Age</div>
+                    <div class="stat-value" style="color: #6366f1; font-size: 28px;">${avgAge}</div>
+                </div>
+            `;
+
+            document.getElementById('statsGrid').innerHTML = statsHtml;
+        }
+
+        function updateCards() {
+            const container = document.getElementById('cardsContainer');
+            
+            if (filteredData.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state" style="grid-column: 1/-1;">
+                        <div class="empty-icon">📭</div>
+                        <h3>No records found</h3>
+                        <p>Try adjusting your filters</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // Apply sorting
+            let sortedData = [...filteredData];
+            if (currentSort.field === 'name') {
+                sortedData.sort((a, b) => {
+                    const nameA = (a.Name || '').toLowerCase();
+                    const nameB = (b.Name || '').toLowerCase();
+                    return currentSort.direction === 'asc' 
+                        ? nameA.localeCompare(nameB)
+                        : nameB.localeCompare(nameA);
+                });
+            } else if (currentSort.field === 'time') {
+                sortedData.sort((a, b) => {
+                    const timeA = a['Check-in Time'] || '';
+                    const timeB = b['Check-in Time'] || '';
+                    return currentSort.direction === 'asc'
+                        ? timeA.localeCompare(timeB)
+                        : timeB.localeCompare(timeA);
+                });
+            }
+
+            const cardsHtml = sortedData.map((record, index) => `
+                <div class="attendance-card">
+                    <div class="card-header">
+                        <div class="card-time">${record.Date || ''} ${record.Time || ''}</div>
+                        <div class="card-name">${record.Name || 'Unknown'}</div>
+                        <div class="card-designation">${record.Designation || ''}</div>
+                    </div>
+                    <div class="card-body">
+                        <div class="card-info-row">
+                            <span class="info-label">Agency</span>
+                            <span class="info-value">${record.Agency || 'N/A'}</span>
+                        </div>
+                        <div class="card-info-row">
+                            <span class="info-label">Location</span>
+                            <span class="info-value">${record.Location || 'N/A'}</span>
+                        </div>
+                        <div class="card-info-row">
+                            <span class="info-label">Check-in</span>
+                            <span class="info-value">${record['Check-in Time'] || 'N/A'}</span>
+                        </div>
+                        <div class="card-info-row">
+                            <span class="info-label">Shift</span>
+                            <span class="info-value">${record.Shift || 'N/A'}</span>
+                        </div>
+                        <div class="card-info-row">
+                            <span class="info-label">Contact</span>
+                            <span class="info-value">${record.Contact || 'N/A'}</span>
+                        </div>
+                        <div class="card-info-row">
+                            <span class="info-label">Age</span>
+                            <span class="info-value">${record.Age || 'N/A'}</span>
+                        </div>
+                        <div class="card-info-row">
+                            <span class="info-label">Service Tenure</span>
+                            <span class="info-value">${record['Service Tenure'] || 'N/A'}</span>
+                        </div>
+                        ${record['Photo URL'] ? `<img src="${record['Photo URL']}" class="card-photo" alt="${record.Name}" onerror="this.style.display='none'" />` : ''}
+                        <button class="download-btn" onclick="downloadCardReport(${filteredData.indexOf(record)})">
+                            📥 Download Card Report
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+
+            container.innerHTML = cardsHtml;
+        }
+
+        function toggleSort(field) {
+            if (currentSort.field === field) {
+                // Toggle direction
+                currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                // New field, default to ascending
+                currentSort.field = field;
+                currentSort.direction = 'asc';
+            }
+            updateSortButtons();
+            updateCards();
+        }
+
+        function updateSortButtons() {
+            // Update button states
+            const nameBtn = document.getElementById('sortByName');
+            const timeBtn = document.getElementById('sortByTime');
+            const nameIcon = document.getElementById('sortNameIcon');
+            const timeIcon = document.getElementById('sortTimeIcon');
+
+            // Reset all buttons
+            nameBtn.classList.remove('active');
+            timeBtn.classList.remove('active');
+            nameIcon.textContent = '↕️';
+            timeIcon.textContent = '↕️';
+
+            // Set active button
+            if (currentSort.field === 'name') {
+                nameBtn.classList.add('active');
+                nameIcon.textContent = currentSort.direction === 'asc' ? '↑' : '↓';
+            } else if (currentSort.field === 'time') {
+                timeBtn.classList.add('active');
+                timeIcon.textContent = currentSort.direction === 'asc' ? '↑' : '↓';
+            }
+        }
+
+        function updateTable() {
+            const container = document.getElementById('tableContainer');
+            
+            if (filteredData.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">📭</div>
+                        <h3>No records found</h3>
+                        <p>Try adjusting your filters</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const tableHtml = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Time</th>
+                            <th>Name</th>
+                            <th>Designation</th>
+                            <th>Agency</th>
+                            <th>Location</th>
+                            <th>Check-in</th>
+                            <th>Shift</th>
+                            <th>Age</th>
+                            <th>Service Tenure</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${filteredData.map(record => `
+                            <tr>
+                                <td>${record.Date || 'N/A'}</td>
+                                <td>${record.Time || 'N/A'}</td>
+                                <td style="font-weight: 600;">${record.Name || 'Unknown'}</td>
+                                <td>${record.Designation || ''}</td>
+                                <td>${record.Agency || ''}</td>
+                                <td>${record.Location || ''}</td>
+                                <td>${record['Check-in Time'] || ''}</td>
+                                <td>${record.Shift || ''}</td>
+                                <td>${record.Age || 'N/A'}</td>
+                                <td>${record['Service Tenure'] || 'N/A'}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+
+            container.innerHTML = tableHtml;
+        }
+
+        function updateCharts() {
+            const dailyData = {};
+            filteredData.forEach(record => {
+                if (!record.Date) return;
+                const date = record.Date;
+                if (!dailyData[date]) {
+                    dailyData[date] = { date, count: 0, agencies: new Set() };
+                }
+                dailyData[date].count++;
+                if (record.Agency) dailyData[date].agencies.add(record.Agency);
+            });
+
+            const dailyArray = Object.values(dailyData).sort((a, b) => 
+                new Date(a.date) - new Date(b.date)
+            );
+
+            const agencyData = {};
+            filteredData.forEach(record => {
+                if (record.Agency) {
+                    agencyData[record.Agency] = (agencyData[record.Agency] || 0) + 1;
+                }
+            });
+
+            createTrendChart(dailyArray);
+            createAgencyBarChart(agencyData);
+            createAgencyPieChart(agencyData);
+            createTrendLineChart(dailyArray);
+        }
+
+        function updateDemographics() {
+            // Age category breakdown - COUNT UNIQUE NAMES per category
+            const ageCategories = {
+                'Under 20': new Set(),
+                '20-30': new Set(),
+                '31-40': new Set(),
+                '41-50': new Set(),
+                '50+': new Set()
+            };
+
+            const ageCategoryAges = {
+                'Under 20': [],
+                '20-30': [],
+                '31-40': [],
+                '41-50': [],
+                '50+': []
+            };
+
+            filteredData.forEach(record => {
+                if (record.Age && record.Name) {
+                    const category = getAgeCategory(record.Age);
+                    ageCategories[category].add(record.Name); // Add unique name
+                    ageCategoryAges[category].push(record.Age);
+                }
+            });
+
+            // Convert Sets to counts
+            const ageCategoryCounts = {};
+            Object.keys(ageCategories).forEach(category => {
+                ageCategoryCounts[category] = ageCategories[category].size;
+            });
+
+            // Create age doughnut chart
+            createAgeDoughnutChart(ageCategoryCounts);
+
+            // Update age summary table
+            const tbody = document.getElementById('ageSummaryTableBody');
+            tbody.innerHTML = Object.keys(ageCategoryCounts).map(category => {
+                const count = ageCategoryCounts[category];
+                const ages = ageCategoryAges[category];
+                const avgAge = ages.length > 0 
+                    ? (ages.reduce((sum, age) => sum + age, 0) / ages.length).toFixed(1)
+                    : 'N/A';
+                
+                return `
+                    <tr>
+                        <td>${category}</td>
+                        <td>${count}</td>
+                        <td>${avgAge}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            // Service tenure chart - COUNT UNIQUE NAMES per tenure
+            const tenureCategories = {};
+            filteredData.forEach(record => {
+                if (record['Service Tenure'] && record.Name) {
+                    const tenure = record['Service Tenure'];
+                    if (!tenureCategories[tenure]) {
+                        tenureCategories[tenure] = new Set();
+                    }
+                    tenureCategories[tenure].add(record.Name); // Add unique name
+                }
+            });
+
+            // Convert Sets to counts
+            const tenureData = {};
+            Object.keys(tenureCategories).forEach(tenure => {
+                tenureData[tenure] = tenureCategories[tenure].size;
+            });
+
+            // Sort tenure categories in ascending order
+            const sortedTenureEntries = Object.entries(tenureData).sort((a, b) => {
+                const extractYears = (str) => {
+                    const match = str.match(/(\d+\.?\d*)/);
+                    return match ? parseFloat(match[1]) : 0;
+                };
+                return extractYears(a[0]) - extractYears(b[0]);
+            });
+
+            const sortedTenureData = Object.fromEntries(sortedTenureEntries);
+            
+            createTenureBarChart(sortedTenureData);
+            createTenurePieChart(sortedTenureData);
+            updateTenureSummaryTable(sortedTenureData);
+        }
+
+        function updateTenureSummaryTable(tenureData) {
+            const tbody = document.getElementById('tenureSummaryTableBody');
+            const total = Object.values(tenureData).reduce((sum, count) => sum + count, 0);
+            
+            tbody.innerHTML = Object.entries(tenureData).map(([tenure, count]) => {
+                const percentage = total > 0 ? ((count / total) * 100).toFixed(1) : 0;
+                return `
+                    <tr>
+                        <td>${tenure}</td>
+                        <td>${count}</td>
+                        <td>${percentage}%</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function updateSafetyReport() {
+            // Double Shift Detection Logic
+            // Group by Date and Name, count unique shifts
+            const dateNameShifts = {};
+            
+            filteredData.forEach(record => {
+                if (!record.Date || !record.Name || !record.Shift) return;
+                
+                const key = `${record.Date}|${record.Name}`;
+                if (!dateNameShifts[key]) {
+                    dateNameShifts[key] = {
+                        date: record.Date,
+                        name: record.Name,
+                        shifts: new Set(),
+                        agency: record.Agency || 'N/A',
+                        designation: record.Designation || 'N/A',
+                        contact: record.Contact || 'N/A'
+                    };
+                }
+                dateNameShifts[key].shifts.add(record.Shift);
+            });
+
+            // Filter to only those with multiple shifts (double shifts)
+            const doubleShifts = Object.values(dateNameShifts)
+                .filter(entry => entry.shifts.size > 1)
+                .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+            const container = document.getElementById('doubleShiftContainer');
+            
+            if (doubleShifts.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">✅</div>
+                        <h3>No Double Shifts Detected</h3>
+                        <p>All guards are working single shifts - good safety compliance!</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const tableHtml = `
+                <div style="background: #fef2f2; padding: 16px; border-radius: 12px; margin-bottom: 20px; border-left: 4px solid #ef4444;">
+                    <p style="color: #991b1b; font-weight: 600; font-size: 15px;">
+                        ⚠️ <strong>${doubleShifts.length}</strong> guard(s) working multiple shifts detected. Review for fatigue management.
+                    </p>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Guard Name</th>
+                            <th>Shifts Worked</th>
+                            <th>Shift Count</th>
+                            <th>Agency</th>
+                            <th>Designation</th>
+                            <th>Contact</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${doubleShifts.map(entry => `
+                            <tr style="background: #fef2f2;">
+                                <td style="font-weight: 600;">${entry.date}</td>
+                                <td style="font-weight: 700; color: #991b1b;">${entry.name}</td>
+                                <td>${Array.from(entry.shifts).join(', ')}</td>
+                                <td><span style="background: #ef4444; color: white; padding: 4px 12px; border-radius: 6px; font-weight: 600;">${entry.shifts.size}</span></td>
+                                <td>${entry.agency}</td>
+                                <td>${entry.designation}</td>
+                                <td>${entry.contact}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+
+            container.innerHTML = tableHtml;
+        }
+
+        function createAgeDoughnutChart(data) {
+            const ctx = document.getElementById('ageDoughnutChart');
+            if (!ctx) return;
+
+            if (charts.ageDoughnut) {
+                charts.ageDoughnut.destroy();
+            }
+
+            const colors = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6'];
+
+            charts.ageDoughnut = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(data),
+                    datasets: [{
+                        data: Object.values(data),
+                        backgroundColor: colors,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+        }
+
+        function createTenureBarChart(data) {
+            const ctx = document.getElementById('tenureBarChart');
+            if (!ctx) return;
+
+            if (charts.tenure) {
+                charts.tenure.destroy();
+            }
+
+            // Horizontal bar chart: Tenure categories on Y-axis, Count on X-axis
+            charts.tenure = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(data),
+                    datasets: [{
+                        label: 'Unique Guards',
+                        data: Object.values(data),
+                        backgroundColor: '#0f766e',
+                    }]
+                },
+                options: {
+                    indexAxis: 'y', // THIS MAKES IT HORIZONTAL - Tenure on Y, Count on X
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        title: {
+                            display: true,
+                            text: 'Unique Guards per Tenure (Ascending Order)'
+                        }
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            },
+                            title: {
+                                display: true,
+                                text: 'Number of Unique Guards'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Service Tenure'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function createTenurePieChart(data) {
+            const ctx = document.getElementById('tenurePieChart');
+            if (!ctx) return;
+
+            if (charts.tenurePie) {
+                charts.tenurePie.destroy();
+            }
+
+            const colors = [
+                '#0f766e', '#14b8a6', '#2dd4bf', '#5eead4', '#99f6e4',
+                '#f59e0b', '#fbbf24', '#fcd34d', '#fde68a',
+                '#ef4444', '#f87171', '#fca5a5',
+                '#6366f1', '#818cf8', '#a5b4fc',
+                '#10b981', '#34d399', '#6ee7b7'
+            ];
+
+            charts.tenurePie = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: Object.keys(data),
+                    datasets: [{
+                        data: Object.values(data),
+                        backgroundColor: colors.slice(0, Object.keys(data).length),
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        },
+                        title: {
+                            display: true,
+                            text: 'Tenure Distribution (%)'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.parsed || 0;
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = ((value / total) * 100).toFixed(1);
+                                    return `${label}: ${value} guards (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function createTrendChart(data) {
+            const ctx = document.getElementById('trendChart');
+            if (!ctx) return;
+
+            if (charts.trend) {
+                charts.trend.destroy();
+            }
+
+            charts.trend = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.map(d => d.date),
+                    datasets: [{
+                        label: 'Guards',
+                        data: data.map(d => d.count),
+                        borderColor: '#0f766e',
+                        backgroundColor: 'rgba(15, 118, 110, 0.1)',
+                        borderWidth: 3,
+                        tension: 0.4
+                    }, {
+                        label: 'Agencies',
+                        data: data.map(d => d.agencies.size),
+                        borderColor: '#f59e0b',
+                        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        function createAgencyBarChart(data) {
+            const ctx = document.getElementById('agencyBarChart');
+            if (!ctx) return;
+
+            if (charts.agencyBar) {
+                charts.agencyBar.destroy();
+            }
+
+            charts.agencyBar = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(data),
+                    datasets: [{
+                        label: 'Guards',
+                        data: Object.values(data),
+                        backgroundColor: '#0f766e',
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        function createAgencyPieChart(data) {
+            const ctx = document.getElementById('agencyPieChart');
+            if (!ctx) return;
+
+            if (charts.agencyPie) {
+                charts.agencyPie.destroy();
+            }
+
+            const colors = ['#0f766e', '#f59e0b', '#ef4444', '#6366f1', '#10b981'];
+
+            charts.agencyPie = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: Object.keys(data),
+                    datasets: [{
+                        data: Object.values(data),
+                        backgroundColor: colors,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+        }
+
+        function createTrendLineChart(data) {
+            const ctx = document.getElementById('trendLineChart');
+            if (!ctx) return;
+
+            if (charts.trendLine) {
+                charts.trendLine.destroy();
+            }
+
+            charts.trendLine = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.map(d => d.date),
+                    datasets: [{
+                        label: 'Guards',
+                        data: data.map(d => d.count),
+                        borderColor: '#0f766e',
+                        backgroundColor: 'rgba(15, 118, 110, 0.1)',
+                        borderWidth: 3,
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.getElementById(`${tabName}Tab`).classList.add('active');
+
+            if (tabName === 'monthly' || tabName === 'analytics') {
+                setTimeout(() => updateCharts(), 100);
+            } else if (tabName === 'demographics') {
+                setTimeout(() => updateDemographics(), 100);
+            } else if (tabName === 'safety') {
+                setTimeout(() => updateSafetyReport(), 100);
+            }
+        }
+
+        function downloadCardReport(index) {
+            const record = filteredData[index];
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            
+            doc.setFontSize(20);
+            doc.setTextColor(15, 118, 110);
+            doc.text('Security Attendance Report', 20, 20);
+            
+            doc.setFontSize(10);
+            doc.setTextColor(100, 116, 139);
+            doc.text(`Generated: ${new Date().toLocaleString()}`, 20, 30);
+            
+            doc.setFontSize(12);
+            doc.setTextColor(15, 23, 42);
+            const details = [
+                ['Name:', record.Name || 'N/A'],
+                ['Designation:', record.Designation || 'N/A'],
+                ['Agency:', record.Agency || 'N/A'],
+                ['Contact:', record.Contact || 'N/A'],
+                ['Location:', record.Location || 'N/A'],
+                ['Date:', record.Date || 'N/A'],
+                ['Time:', record.Time || 'N/A'],
+                ['Check-in Time:', record['Check-in Time'] || 'N/A'],
+                ['Shift:', record.Shift || 'N/A'],
+                ['Age:', record.Age || 'N/A'],
+                ['D.O.B:', record['D.O.B'] || 'N/A'],
+                ['Employed Since:', record['Employed Since'] || 'N/A'],
+                ['Service Tenure:', record['Service Tenure'] || 'N/A'],
+            ];
+            
+            let yPos = 45;
+            details.forEach(([label, value]) => {
+                doc.setFont(undefined, 'bold');
+                doc.text(label, 20, yPos);
+                doc.setFont(undefined, 'normal');
+                doc.text(String(value), 80, yPos);
+                yPos += 10;
+            });
+            
+            doc.save(`attendance-${(record.Name || 'guard').replace(/\s+/g, '-')}-${Date.now()}.pdf`);
+        }
+
+        function downloadDailyReport() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            
+            doc.setFontSize(18);
+            doc.setTextColor(15, 118, 110);
+            doc.text('Daily Attendance Summary', 20, 20);
+            
+            doc.setFontSize(10);
+            doc.setTextColor(100, 116, 139);
+            const agency = document.getElementById('agencyFilter').value;
+            const shift = document.getElementById('shiftFilter').value;
+            const designation = document.getElementById('designationFilter').value;
+            const location = document.getElementById('locationFilter').value;
+            const date = document.getElementById('dateFilter').value;
+            
+            doc.text(`Date: ${date || 'All Dates'}`, 20, 30);
+            doc.text(`Agency: ${agency === 'all' ? 'All Agencies' : agency}`, 20, 36);
+            doc.text(`Shift: ${shift === 'all' ? 'All Shifts' : shift}`, 20, 42);
+            doc.text(`Designation: ${designation === 'all' ? 'All Designations' : designation}`, 20, 48);
+            doc.text(`Location: ${location === 'all' ? 'All Locations' : location}`, 20, 54);
+            doc.text(`Generated: ${new Date().toLocaleString()}`, 20, 60);
+            
+            doc.setFontSize(12);
+            doc.setTextColor(15, 23, 42);
+            doc.text(`Total Guards: ${filteredData.length}`, 20, 73);
+            
+            const tableData = filteredData.map(r => [
+                r.Name || '',
+                r.Designation || '',
+                r.Agency || '',
+                r.Shift || '',
+                r.Location || '',
+                r['Check-in Time'] || ''
+            ]);
+            
+            doc.autoTable({
+                startY: 80,
+                head: [['Name', 'Designation', 'Agency', 'Shift', 'Location', 'Check-in']],
+                body: tableData,
+                headStyles: { fillColor: [15, 118, 110] },
+                margin: { top: 80 }
+            });
+            
+            doc.save(`daily-report-${date || 'all'}-${Date.now()}.pdf`);
+        }
+
+        function downloadMonthlyReport() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            
+            doc.setFontSize(18);
+            doc.setTextColor(15, 118, 110);
+            doc.text('Monthly Attendance Report', 20, 20);
+            
+            doc.setFontSize(10);
+            doc.setTextColor(100, 116, 139);
+            doc.text(`Generated: ${new Date().toLocaleString()}`, 20, 30);
+            
+            doc.setFontSize(12);
+            doc.setTextColor(15, 23, 42);
+            doc.text(`Total Records: ${filteredData.length}`, 20, 45);
+            const uniqueAgencies = new Set(filteredData.map(d => d.Agency).filter(Boolean)).size;
+            doc.text(`Agencies: ${uniqueAgencies}`, 20, 52);
+            
+            const dailyData = {};
+            filteredData.forEach(record => {
+                if (!record.Date) return;
+                const date = record.Date;
+                if (!dailyData[date]) {
+                    dailyData[date] = { date, count: 0, agencies: new Set() };
+                }
+                dailyData[date].count++;
+                if (record.Agency) dailyData[date].agencies.add(record.Agency);
+            });
+
+            const tableData = Object.values(dailyData)
+                .sort((a, b) => new Date(a.date) - new Date(b.date))
+                .map(d => [d.date, d.count, d.agencies.size]);
+            
+            doc.autoTable({
+                startY: 70,
+                head: [['Date', 'Total Guards', 'Agencies']],
+                body: tableData,
+                headStyles: { fillColor: [15, 118, 110] },
+            });
+            
+            doc.save(`monthly-report-${Date.now()}.pdf`);
+        }
+
+        function downloadSafetyReport() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            
+            doc.setFontSize(18);
+            doc.setTextColor(239, 68, 68);
+            doc.text('Safety Report - Double Shift Monitoring', 20, 20);
+            
+            doc.setFontSize(10);
+            doc.setTextColor(100, 116, 139);
+            doc.text(`Generated: ${new Date().toLocaleString()}`, 20, 30);
+            doc.text(`Reporting Period: ${document.getElementById('dateFilter').value || 'All Dates'}`, 20, 36);
+            
+            // Collect double shift data
+            const dateNameShifts = {};
+            
+            filteredData.forEach(record => {
+                if (!record.Date || !record.Name || !record.Shift) return;
+                
+                const key = `${record.Date}|${record.Name}`;
+                if (!dateNameShifts[key]) {
+                    dateNameShifts[key] = {
+                        date: record.Date,
+                        name: record.Name,
+                        shifts: new Set(),
+                        agency: record.Agency || 'N/A',
+                        designation: record.Designation || 'N/A',
+                        contact: record.Contact || 'N/A'
+                    };
+                }
+                dateNameShifts[key].shifts.add(record.Shift);
+            });
+
+            const doubleShifts = Object.values(dateNameShifts)
+                .filter(entry => entry.shifts.size > 1)
+                .sort((a, b) => new Date(b.date) - new Date(a.date));
+            
+            doc.setFontSize(12);
+            doc.setTextColor(15, 23, 42);
+            doc.text(`Total Guards with Double Shifts: ${doubleShifts.length}`, 20, 50);
+            
+            if (doubleShifts.length === 0) {
+                doc.setFontSize(14);
+                doc.setTextColor(16, 185, 129);
+                doc.text('✓ No double shifts detected - Good safety compliance!', 20, 70);
+            } else {
+                doc.setFontSize(10);
+                doc.setTextColor(153, 27, 27);
+                doc.text('⚠ WARNING: Multiple shifts detected may indicate fatigue risk', 20, 60);
+                
+                const tableData = doubleShifts.map(entry => [
+                    entry.date,
+                    entry.name,
+                    Array.from(entry.shifts).join(', '),
+                    entry.shifts.size.toString(),
+                    entry.agency,
+                    entry.designation
+                ]);
+                
+                doc.autoTable({
+                    startY: 70,
+                    head: [['Date', 'Guard Name', 'Shifts Worked', 'Count', 'Agency', 'Designation']],
+                    body: tableData,
+                    headStyles: { fillColor: [239, 68, 68] },
+                    bodyStyles: { fillColor: [254, 242, 242] }
+                });
+            }
+            
+            doc.save(`safety-report-double-shifts-${Date.now()}.pdf`);
+        }
+    </script>
+</body>
+</html>
